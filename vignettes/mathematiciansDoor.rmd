@@ -11,12 +11,12 @@ vignette: >
   %\usepackage[utf8]{inputenc}
 ---
 
--What is the probability distribution and how does it depend on covariates?
+- What is the probability distribution and how does it depend on covariates?  
 - How to estimate it from a set of independent random samples (but without a
   trusted parametric theory of the shape either of the distribution or of the
-  dependence)?
-- How to recognize a bad estimate?
-- How uncertain is the estimate?
+  dependence)?  
+- How to recognize a bad estimate?  
+- How uncertain is the estimate?  
 
 What is the probability distribution and how does it depend on covariates?
 -----------------------------------------------------------------------------
@@ -56,8 +56,8 @@ Having estimated the cdf everywhere, resampling methods and
 bootstrapping beckon.
 If a resampled field $F2$ differs from $F1$ `by this much'
 then the Basic Bootstrap Conjecture states that $F1$
-could plausibly differ from $F0$ `by this much'. 
-This can only be true for one formulation of `by this much' and so cannot
+could plausibly differ from $F0$ 'by this much'. 
+This can only be true for one formulation of 'by this much' and so cannot
 be a general principle -- it is more a speculation.  [Thus the common
 complaint that the basic bootstrap is not stable under transformation of
 variables points not to a flaw but to an aspect of reality.]
@@ -73,7 +73,7 @@ Then we can phrase a Basic Bootstrap Confidence Conjecture:
 The probability that $T0$ is less than the $\alpha$ quantile of ${CT0}$
 is $\alpha$.
 
-Typical measure of `by this much': the difference; the ratio; the
+Typical measure 'by this much': the difference; the ratio; the
 difference expressed in standard deviations (if known).
 The analysis method doesn't understand the problem.  Sometimes there is a
 range to be preserved in plausible candidate deviations, sometimes not.
