@@ -1,0 +1,228 @@
+---
+title: "Programmer's Door"
+author: "Chris Hammill"
+date: "`r Sys.Date()`"
+output: rmarkdown::pdf_document
+header-includes:
+   \usepackage{color}
+vignette: >
+  %\VignetteIndexEntry{Programmer's Door}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\usepackage[utf8]{inputenc}
+---
+
+```{r, echo = FALSE, message = FALSE, purl = FALSE}
+library(knitr)
+knit_hooks$set(smc = function(before, options, envir){
+  if(before) setMaxCores(2)
+  })
+```
+```{r, echo = FALSE, message = FALSE}
+library(ogmap)
+setMaxCores(2)
+```
+
+Getting Started with Ogive Mapping
+===================================
+
+Motivation
+-----------
+
+In many areas of science we are interested in predicting not only the expected value of some random variable of interest but some properties of the distribution of those values. For example, it would be worthwhile to know not only how many fish to expect in the future, but additionally the uncertainties in that prediction, and how those uncertainties might change with the covariates. In order to do so, a researcher typically reaches for a toolkit based on statistical distributions which may or may not be appropriate for the data at hand. Ogive mapping (ogmap) is a form of non-parametric local density estimation, provides a good alternative to such techniques. Ogive mapping relies on fewer assumptions and is appropriate for a large variety of data. In essence, an ogmap analysis uses the distance between observations in covariate space (weighted by some kernel function) to estimate the probability distribution of a variable of interest at any location within its covariate space.
+
+Throughout this document repeated reference will be made to: probability fields, nodes, random variables, guides, and surveys. Some of these terms have alternative meanings, so it is important to disambiguate their meaning. A **probability field** is set of probability distributions for a random variable of interest over some covariate space, with the dimensions of the field matching the dimensions of the covariates. In this case, the covariates are referred to as **guides** and can either be a property of the field itself or observations within the field. The **random variable** is the quantity of interest, be it number of animals, biomass, or precipitation. Any observed value can be treated as a sample from it's respective probability distribution. A discrete location within covariate space, either with or without an observation of the random variable, is termed a **node** within the field. A **survey** is a special set of nodes for which an observation of the random variable has been made (henceforth assuming error free observation). The objective of a ogmap analysis, using the new terminology, is to convert a dataset of interest into a set of survey nodes, then build a probability field using those nodes, such that we can estimate the probability distribution at any node within the field. Once the primary task of creating the probability field has been completed, it is trivial to calculate convenient statistical quantities like mean and variance at any node. It is also relatively painless to compute confidence intervals for those quantities with bootstrap resampling techniques.
+
+The goal of this vignette is to gently introduce general use of the ogmap package, intermingling explanations of the important functions with example usage. If you'd like to jump ahead and view the code for this vignette without any exposition, call `edit(vignette("gettingStarted", package = "ogmap"))`.
+
+Getting Started
+----------------
+
+The first step of any statistical analysis is to consider your question of interest and formulate a "plan of attack" to answer that question. In this case we will be looking at some contrived stock recruitment data and attempting to put confidence limits on our estimates for recruit number at the next time step. The goal here is to learn the basic steps of performing an ogmap analysis, if you'd like to jump ahead and view the code for this vignette without any exposition, call `edit(vignette("gettingStarted", package = "ogmap"))`
+
+The Data
+-----------
+
+The data we'll be using is bundled with the `ogmap` package with the name `stockRecruitment`. This simple dataset contains 49 observations of adult stock and juvenile recruitment.
+
+```{r}
+data(stockRecruitment)
+head(stockRecruitment)
+```
+
+Set up the distance and kernel
+--------------------------------
+
+To fit our probability field we'll need both a distance function and a kernel function. We'll use pre-canned solutions in both cases. Our distance function will be the linear distance (`linearDistance`) and our kernel function will be the subcauchy kernel (`subcauchy`). The one-dimensional linear distance is just the absolute difference between our guide variables (`stock`) weighted by some scalar value of our choice. The subcauchy kernel is a modification of the cauchy function to remove its infinite variance property. The subcauchy kernel is a function of the linear distance ($d$) and is governed by one shape parameter ($s$) as shown in the equation below:
+
+$$ \frac{1}{1 + d^s} $$  
+
+The interface to these functions used in `ogmap` may perhaps be a bit opaque at first. Instead of passing the functions themselves to our `probField` we go through an extra step of abstraction order to make their use and re-use simpler. I'll explain using our `linearDistance` function. 
+
+
+Distance Functions
+------------------
+
+Since our distance functions are designed to work on nodes within a probability field, we have provided a means to create versatile distance functions. For example, if we wish to create a linear distance function with a scale parameter of 4 we call:
+
+```{r}
+distFun <- linearDistance(4)
+```
+
+The variable `distFun` is now a function in it's own right, ready to be called on two nodes as below:
+
+```{r, eval = FALSE, purl=FALSE}
+distFun(node1, node2)
+```
+
+The value of this approach will probably not be readily apparent. The more intuitive method is:
+
+```{r, eval = FALSE, purl=FALSE}
+distFun2 <- function(node1, node2){
+  #some code
+}
+```
+
+but, as it turns out, `#some code` is suprisingly complicated and unextensible for all but the most trivial cases. For instance, if our nodes have more than one guide variable, or our guide variable's name changes, we'd have to rewrite `distFun2` to refer to those guide variables by their new name. Modifying such a function programatically is a nightmare. To specify a new guide variable name using our interface is as simple as:
+
+```{r, eval = FALSE, purl=FALSE}
+distFun3 <- linearDistance(4, guides = list(scale = "newName"))
+```
+
+And everything would work expected. Not to mention trying to programatically change the scale parameter which would be nearly impossible with the alternative. So I hope you're convinced of the utility of this approach, if not, send me an email with your alternative, but I digress. The unfortunate consequence of this approach is that writing bespoke distance and kernel functions is more challenging, but we've tried to make the documentation as clear as possible[^1]. For now, we'll keep `distFun` around to be used in our example workflow, as we move on to setting up the kernel function.
+
+Kernel Functions
+----------------
+
+Kernel functions are considerably simpler conceptually than distance functions because they need only accept one argument (the distance), but for the programatic modification issue mentioned briefly above, we've kept the same approach. To create our subcauchy kernel with a shape parameter of 3 we simply call:
+
+```{r}
+kernelFun <- subcauchy(3)
+```
+
+Our next order of business is constructing our probability field.
+
+Build the field
+----------------
+
+There are currently two interfaces to the `probField` constructor. One takes a data.frame as its first argument, with the name of the random variable passed as an argument. This has the disadvantage that no irrelevant columns can be passed to the constructor. Meaning you have to prune your dataset before passing it to the constuctor. The second constructor is superior in this regard, it takes a fromula as its first argument. This allows the constructor to pick out and potentially transform columns prior to making the field. The requirements for the formula are that the left-hand side consists of one column name, indicating the random variable, and the right-hand side consists of one or more guide variables separate by "`+`"[^2]. This vignette will focus on using the latter version of the constructor.
+
+To create our field using the formula constructor we need only call:
+
+```{r, smc = TRUE}
+stockRecField <- probField(recruitment ~ stock, data = stockRecruitment,
+                           kernel = kernelFun, distance = distFun)
+```
+
+Internally, the probField constructor extracts the columns used in the formula (here `recruitment` and `stock`) from the data.frame in the `data` argument. This sub-data.frame is then converted into a list of nodes. The random variable for the nodes are set to the column in the left-hand side of the formula, with guide variables taken from the right-hand side. Then the relevance (kernel-weighted distance) of each node to each other node is calculated. Using the computed relevance, the probability distribution (CDF) for each node is calculated.
+
+To examine the field manually, the `ogmap` package provides a suite of accessor functions. Here we'll see a few of the more important ones. Lets suppose we're interested to see what the CDF and associated step probabilities for our 5th survey node look like:
+
+```{r, fig.show='hold'}
+node5 <- getNode(stockRecField, 5)
+
+cdf5 <- getCDF(node5)
+steps5 <- getSteps(node5)
+
+parO <- par(no.readonly = TRUE)
+par(mfrow = c(1,2))
+
+plot(cdf5, type = "l")
+plot(steps5, type = "l")
+
+par(parO)
+```
+
+This is the long way to create these plots as the `ogmap` package provides a plot method for nodes that will create these plots for you. The above code can be replaced with
+
+```{r, eval=FALSE, purl=FALSE}
+plot(getNode(stockRecField, 5))
+```
+
+There are more accessor and convenience functions available - examine the help files for more information.
+
+Statistics
+-----------
+
+The most important step after building the field is generating interesting statistics from the field (and perhaps placing confidence limits on those statistics). Suppose for example we wish to know how many recruits to expect when we have a stock of 57 (thousand) fish. Since a stock of 57 is in the domain of our guide variable, but does not correspond with a survey node, we need to create a new node. Then, from the original field, we need to generate the probability distribution at that node. To do so, we create a new node with the `node` function and use `evaluateNode` to compute the probability distribution:
+
+```{r}
+newNode <- evaluateNodes(node(57), stockRecField)
+plot(newNode)
+```
+
+From the probability distribution we can estimate our expected value and variance at that node:
+
+```{r}
+nodeExpectation(newNode, stockRecField)
+nodeVariance(newNode, stockRecField)
+nodeConfidenceIntervals(newNode, stockRecField)
+```
+
+For calculating more complex statistics, and statistics that depend on many nodes, we have provided functions in the `probFieldStatistic` class including multi-node expectation and weighted sums of means (useful when integrating a point estimates over a portion of the domain). As with the `probFieldKernel` and `probFieldDistance` functions above, creating a bespoke `probFieldStatistic` is challenging, but the rewards in terms of computation time and re-usability are well worth the trouble. The goal of the `probFieldStatistic` class is to provide an easy interface to calculate statistics and resample them. 
+
+To facillitate ease of calculation and resampling, the challenge of computing the statistic is broken up into two parts: a design function and a result function. The design function computes the statistical machinery necessary for computing the statistic, and the result function takes the object created by the design function and optional resampling indices to compute the statistic. To better understand the `probFieldStatistic` class we'll walk through computing the confidence intervals of the node expectation using a the `expectationStat` function.
+
+```{r}
+stat <- expectationStat(stockRecField, node(57))
+stat$result()
+```
+
+Note that the computed expectation is identical to the result of `nodeExpectation`. But now the statistic can be applied to multiple nodes at once:
+
+```{r}
+stat2 <- expectationStat(stockRecField, as.nodes(c(57,49,12)))
+stat2$result()
+```
+
+and can be resampled easily:
+
+```{r}
+resampledStats <- replicate(1000, stat$result(resampledSurveyIndices(stockRecField)), 
+                            simplify = TRUE)
+
+resampledStats <- sort(resampledStats)
+
+lowerLimitIndex <- floor((1 - .95)/2 * length(resampledStats))
+upperLimitIndex <- length(resampledStats) - lowerLimitIndex
+
+confidenceIntervalVector <- c(resampledStats[lowerLimitIndex], 
+                              stat$result(), 
+                              resampledStats[upperLimitIndex])
+
+confidenceIntervalVector
+```
+
+Note that the confidence interval is qualitatively similar to the one calculated by `nodeConfidenceInterval` but, since resampling is a random process, it is highly unlikely they would be identical. The advantage here is again that the same routine can be performed with multiple nodes at once:
+
+```{r}
+resampledStats <- replicate(1000, stat2$result(resampledSurveyIndices(stockRecField)))
+resampledStats <- 
+  apply(resampledStats, 1, sort) #note apply over margin 1 transposes the matrix 
+
+lowerLimitIndex <- floor((1 - .95)/2 * nrow(resampledStats))
+upperLimitIndex <- nrow(resampledStats) - lowerLimitIndex
+
+confidenceIntervalMatrix <- cbind(resampledStats[lowerLimitIndex,], 
+                                  stat2$result(), 
+                                  resampledStats[upperLimitIndex,])
+
+rownames(confidenceIntervalMatrix) <- c("57", "49", "12")
+colnames(confidenceIntervalMatrix) <- c("2.5%", "expectation", "97.5%")
+
+confidenceIntervalMatrix
+```
+
+Outro
+------
+
+And with that, you should be able to get started running your own ogive mapping non-parametric local density estimation analysis. I hope you found this vignette useful, and if you have any questions about the package please feel free to contact me, my email is available from our CRAN page.
+
+Cheers and good luck,
+
+Chris
+
+Special thanks to Holly Caravan and Tom Chapman for editing a draft of this vignette. 
+
+[^1]: The easiest method to learn how to create a custom distance or kernel functions is to examine the code for ours. Load `ogmap` and then type `edit(linearDistance)` to examine the source code. For a more complicated example with 2 sub-distances requiring three guides try `edit(trawlDistance)`.
+
+[^2]: The use of variable interaction symbols like "*" and ":" will not work, this function has made no allowance their use. Indeed variable interactions are not components of ogmap analysis at the time of writing.

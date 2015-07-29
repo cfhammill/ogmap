@@ -1,0 +1,88 @@
+---
+title: "Mathematician's Door"
+author: "Geoff Evans"
+date: "`r Sys.Date()`"
+output: rmarkdown::pdf_document
+header-includes:
+   \usepackage{color}
+vignette: >
+  %\VignetteIndexEntry{Mathematician's Door}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\usepackage[utf8]{inputenc}
+---
+
+-What is the probability distribution and how does it depend on covariates?
+- How to estimate it from a set of independent random samples (but without a
+  trusted parametric theory of the shape either of the distribution or of the
+  dependence)?
+- How to recognize a bad estimate?
+- How uncertain is the estimate?
+
+What is the probability distribution and how does it depend on covariates?
+-----------------------------------------------------------------------------
+
+A probability field (or field for short) $F0$ is an assignment of (the ability
+to assign, a function that assigns) a probability distribution to every
+element (node) of some domain.
+
+How to estimate it from a survey (set of independent random samples) $S1 = {(x_i,y_i)}$ of $F0$?
+If $\sum w_i y_i$ is an estimate of the mean at node $x$, with $w_i$ non-negative and
+$\sum w_i=1$, then $\sum w_i H(y-y_i)$, where H is the Heaviside function,
+is an estimate of a cumulative distribution function for $y$ at $x$
+with that mean.  So any kernel-based nonlinear regression
+method with non-negative weights carries with it an estimate of the whole
+cdf and how it depends on covariates.  This gives an estimated field $F1$.
+
+How to recognize a bad estimate?
+---------------------------------
+
+The only assumption we have made is that the survey observations are
+independent random samples from their respective cfds.  Therefore, the only
+available test is whether the estimated field is one that the survey could
+plausibly be independent random samples from. That is, the cumulative
+probabilities of the $y_i$ should be uniformly and independently distributed
+on [0,1].  Independence: the difference between pairs of probabilities
+(in particular at nearby pairs of nodes) should be triangularly distributed on [-1,1].
+(There are technical issues of choosing pairs.)  This can be a way to choose
+bandwidths of kernel smoothing functions even in `classical' nonparametric
+regression where the sole task is to estimate the mean.  It is an improvement on `classical'
+cross-validation where the underlying question is how small you can get
+away with making the variance.
+
+How uncertain are we of the estimate?
+----------------------------------------
+
+Having estimated the cdf everywhere, resampling methods and
+bootstrapping beckon.
+If a resampled field $F2$ differs from $F1$ `by this much'
+then the Basic Bootstrap Conjecture states that $F1$
+could plausibly differ from $F0$ `by this much'. 
+This can only be true for one formulation of `by this much' and so cannot
+be a general principle -- it is more a speculation.  [Thus the common
+complaint that the basic bootstrap is not stable under transformation of
+variables points not to a flaw but to an aspect of reality.]
+
+Uncertainty about a whole probability field is hard to quantify; an
+easier task is to estimate uncertainty about some interesting scalar
+function (statistic) $T$ of the field -- described by confidence bounds.
+Given the sample statistic $T1$ and a resample statistic $T2$ define the
+candidate true statistic $CT0$ to be the value from which $T1$
+differs 'by as much' as $T2$ differs from $T1$.  Assume we have a set of
+${CT0}$ from multiple resasmples.
+Then we can phrase a Basic Bootstrap Confidence Conjecture:
+The probability that $T0$ is less than the $\alpha$ quantile of ${CT0}$
+is $\alpha$.
+
+Typical measure of `by this much': the difference; the ratio; the
+difference expressed in standard deviations (if known).
+The analysis method doesn't understand the problem.  Sometimes there is a
+range to be preserved in plausible candidate deviations, sometimes not.
+Our understanding of the problem can be captured in our definition of `by
+this much': for example having to lie within a finite range.
+
+Double bootstrap:  We can descend a level and resample $F2$ to produce
+statistic $T3$ and candidate $CT1$.  The advantage of this: we can do it
+repeatedly, and we know if each $CT1$ exceeded $T1$.  This enables us to
+make computations for the Double Bootstrap Confidence Conjecture:
+The probability that $T0$ is less than the $\alpha$ quantile of ${CT0}$
+is the probability that $T1$ is less than the $\alpha$ quantile of $CT1$.
