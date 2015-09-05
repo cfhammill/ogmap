@@ -1,3 +1,23 @@
+########################################################################
+# probField.R
+# Copyright 2015 Geoff Evans
+#
+# This file is part of the Ogmap R Package.
+#
+# Ogmap is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ogmap is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ogmap.  If not, see <http://www.gnu.org/licenses/>.
+########################################################################
+
 #' @title Generate a probability field
 #' @description Generate a probability field from a data.frame of survey observations
 #' @param x Either a \link{formula} or a data.frame of the form described below
