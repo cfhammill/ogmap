@@ -1,6 +1,6 @@
 ########################################################################
 # distanceAndKernel.R
-# Copyright 2015 Geoff Evans
+# Copyright Her Majesty the Queen in right of Canada, 2015
 #
 # This file is part of the Ogmap R Package.
 #
